@@ -1,10 +1,10 @@
 import cv2
-import possibleChars
-import preprocess
 import numpy as np
+import os
+
+import possibleChars
 
 kNearest = cv2.ml.KNearest_create()
-
 MIN_PIXEL_WIDTH = 2
 MIN_PIXEL_HEIGHT = 8
 
@@ -68,7 +68,20 @@ def load_and_train_KNN():
 # end function
 
 
-def check_if_possible_char(possibleChar):
+def find_chars(img_thresh):
+    list_of_chars = []
+    img_thresh_copy = img_thresh.copy()
+    contours, _ = cv2.findContours(
+        img_thresh_copy, cv2.RETR_LIST,
+        cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        possibleChar = possibleChars.PossibleChar(contour)
+        if check_if_char(possibleChar):
+            list_of_chars.append(possibleChar)
+    return list_of_chars
+
+
+def check_if_char(possibleChar):
     if (possibleChar.int_rect_area > MIN_PIXEL_AREA
         and possibleChar.int_rect_w > MIN_PIXEL_WIDTH
         and possibleChar.int_rect_h > MIN_PIXEL_HEIGHT
@@ -79,30 +92,30 @@ def check_if_possible_char(possibleChar):
         return False
 
 
-def recognize_char(img_thresh, list_of_possible_chars):
-    strChars = ""
+def recognize_char(img_thresh, list_of_chars):
+    str_chars = ""
     height, width = img_thresh.shape
 
-    imgThreshColor = np.zeros((height, width, 3), np.uint8)
+    img_thresh_color = np.zeros((height, width, 3), np.uint8)
 
-    list_of_possible_chars.sort(
-        key=lambda matchingChar: matchingChar.int_center_x)
+    list_of_chars.sort(
+        key=lambda matching_char: matching_char.int_center_x)
 
-    cv2.cvtColor(img_thresh, cv2.COLOR_GRAY2BGR, imgThreshColor)
+    cv2.cvtColor(img_thresh, cv2.COLOR_GRAY2BGR, img_thresh_color)
 
-    for currentChar in list_of_possible_chars:
-        pt1 = (currentChar.int_rect_x, currentChar.int_rect_y)
-        pt2 = ((currentChar.int_rect_x + currentChar.int_rect_w),
-               (currentChar.int_rect_y + currentChar.int_rect_h))
+    for current_char in list_of_chars:
+        pt1 = (current_char.int_rect_x, current_char.int_rect_y)
+        pt2 = ((current_char.int_rect_x + current_char.int_rect_w),
+               (current_char.int_rect_y + current_char.int_rect_h))
 
         cv2.rectangle(imgThreshColor, pt1, pt2, (0.0, 255.0, 0.0),
                       2)           # draw green box around the char
 
         # crop char out of threshold image
-        imgROI = img_thresh[currentChar.int_rect_y: currentChar.int_rect_y
-                            + currentChar.int_rect_h,
-                            currentChar.int_rect_x: currentChar.int_rect_x
-                            + currentChar.int_rect_w]
+        imgROI = img_thresh[current_char.int_rect_y: current_char.int_rect_y
+                            + current_char.int_rect_h,
+                            current_char.int_rect_x: current_char.int_rect_x
+                            + current_char.int_rect_w]
 
         # resize image, this is necessary for char recognition
         imgROIResized = cv2.resize(
@@ -119,33 +132,10 @@ def recognize_char(img_thresh, list_of_possible_chars):
             npaROIResized, k=1)
 
         # get character from results
-        strCurrentChar = str(chr(int(npaResults[0][0])))
+        str_current_char = str(chr(int(npaResults[0][0])))
 
         # append current char to full string
-        strChars = strChars + strCurrentChar
+        str_chars = str_chars + str_current_char
 
     # end for
-    return strChars
-
-
-load_and_train_KNN()
-
-img = cv2.imread("test.jpg")
-img_gray, img_thresh = preprocess.preprocess(img)
-
-list_of_possible_chars = []
-img_thresh_copy = img_thresh.copy()
-
-cv2.imshow('threshold', img_thresh)
-cv2.waitKey(0)
-contours, _ = cv2.findContours(
-    img_thresh_copy, cv2.RETR_LIST,
-    cv2.CHAIN_APPROX_SIMPLE)
-
-for contour in contours:
-    possibleChar = possibleChars.PossibleChar(contour)
-    if check_if_possible_char(possibleChar):
-        list_of_possible_chars.append(possibleChar)
-
-strChars = recognize_char(img_thresh, list_of_possible_chars)
-print(strChars)
+    return str_chars

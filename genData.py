@@ -29,13 +29,13 @@ def main():
                                        cv2.THRESH_BINARY_INV,
                                        11,
                                        2)
-    # cv2.imshow("imgThresh", imgThresh)
-    img_thresh_cp = img_thresh.copy()
-    _, npa_contours, _ = cv2.findContours(img_thresh_cp,
-                                          cv2.RETR_EXTERNAL,
-                                          cv2.CHAIN_APPROX_SIMPLE)
 
-    # cv2.imshow('contours', imgContours)
+    cv2.imshow("imgThresh", img_thresh)
+
+    img_thresh_cp = img_thresh.copy()
+    npa_contours, _ = cv2.findContours(img_thresh_cp,
+                                       cv2.RETR_EXTERNAL,
+                                       cv2.CHAIN_APPROX_SIMPLE)
 
     # declare empty numpy array, it will store img data
     flattened_images = np.empty(
@@ -73,8 +73,6 @@ def main():
             img_roi_resized = cv2.resize(
                 img_roi, (RESIZED_IMAGE_WIDTH, RESIZED_IMAGE_HEIGHT))
 
-            # show cropped out char for reference
-            # cv2.imshow("imgROI", imgROI)
             # show resized image for reference
             cv2.imshow("imgROIResized", img_roi_resized)
             # show training, this will now have red rectangles drawn on it
