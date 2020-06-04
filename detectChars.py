@@ -1,8 +1,31 @@
 import cv2
 import numpy as np
 import os
+import preprocess
+import argparse
 
 import possibleChars
+
+find_char = False
+get_accuracy = False
+
+ap = argparse.ArgumentParser()
+ap.add_argument("-i", "--image",
+                help="Path to the plate image")
+ap.add_argument("-f", "--folder", default=None,
+                help="Path to the folder plate images")
+args = vars(ap.parse_args())
+if args['image'] is not None:
+    find_char = True
+    if not os.path.exists(args['image']):
+        print("The image path doesn't exist!")
+        find_char = False
+if args['folder'] is not None:
+    get_accuracy = True
+    if not os.path.exists(args['folder']):
+        print("The folder path doesn't exist!")
+        get_accuracy = False
+args = vars(ap.parse_args())
 
 kNearest = cv2.ml.KNearest_create()
 MIN_PIXEL_WIDTH = 2
@@ -30,7 +53,7 @@ MIN_NUMBER_OF_MATCHING_CHARS = 3
 RESIZED_CHAR_IMAGE_WIDTH = 20
 RESIZED_CHAR_IMAGE_HEIGHT = 30
 
-MIN_CONTOUR_AREA = 100
+MIN_CONTOUR_AREA = 15
 
 
 def load_and_train_KNN():
@@ -72,7 +95,7 @@ def find_chars(img_thresh):
     list_of_chars = []
     img_thresh_copy = img_thresh.copy()
     contours, _ = cv2.findContours(
-        img_thresh_copy, cv2.RETR_LIST,
+        img_thresh_copy, cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE)
     for contour in contours:
         possibleChar = possibleChars.PossibleChar(contour)
@@ -108,7 +131,7 @@ def recognize_char(img_thresh, list_of_chars):
         pt2 = ((current_char.int_rect_x + current_char.int_rect_w),
                (current_char.int_rect_y + current_char.int_rect_h))
 
-        cv2.rectangle(imgThreshColor, pt1, pt2, (0.0, 255.0, 0.0),
+        cv2.rectangle(img_thresh_color, pt1, pt2, (0.0, 255.0, 0.0),
                       2)           # draw green box around the char
 
         # crop char out of threshold image
@@ -139,3 +162,40 @@ def recognize_char(img_thresh, list_of_chars):
 
     # end for
     return str_chars
+
+
+def main():
+    load_and_train_KNN()
+    if find_char:
+        img = cv2.imread(args['image'])
+        img_gray, img_thresh = preprocess.preprocess(img)
+        list_of_chars = find_chars(img_thresh)
+        str_plate = recognize_char(img_thresh, list_of_chars)
+        print(str_plate)
+    elif get_accuracy:
+        count_chars = 0
+        count_true = 0
+        for image in os.listdir(args['folder']):
+            label = image[9:17]
+            pathImage = args['folder'] + "/" + image
+            img = cv2.imread(pathImage)
+            img_gray, img_thresh = preprocess.preprocess(img)
+            list_of_chars = find_chars(img_thresh)
+            str_plate = recognize_char(img_thresh, list_of_chars)
+            if len(str_plate) < len(label):
+                for i in range(0, len(label) - len(str_plate)):
+                    str_plate = str_plate + '0'
+            for i in range(0, len(label)):
+                count_chars += 1
+                if label[i] == str_plate[i]:
+                    count_true += 1
+        print("Total chars: " + str(count_chars) + "\n")
+        print("True chars: " + str(count_true) + "\n")
+        print("Accuracy: " + str(float(count_true/count_chars)) + "\n")
+    else:
+        print("Nothing to do, pass args to do some thing!")
+    return
+
+
+if __name__ == '__main__':
+    main()
