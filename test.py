@@ -1,74 +1,24 @@
-import cv2
-import possibleChars
-import preprocess
+import sys
+import os
 import numpy as np
+import possibleChars
+import cv2
 
-kNearest = cv2.ml.KNearest_create()
+MIN_CONTOUR_AREA = 15
 
-MIN_PIXEL_WIDTH = 2
+RESIZED_IMAGE_WIDTH = 20
+RESIZED_IMAGE_HEIGHT = 30
+
+MIN_PIXEL_WIDTH = 1
 MIN_PIXEL_HEIGHT = 8
 
-MIN_ASPECT_RATIO = 0.25
-MAX_ASPECT_RATIO = 1.0
+MIN_ASPECT_RATIO = 0.1
+MAX_ASPECT_RATIO = 0.9
 
-MIN_PIXEL_AREA = 80
-
-# constants for comparing two chars
-MIN_DIAG_SIZE_MULTIPLE_AWAY = 0.3
-MAX_DIAG_SIZE_MULTIPLE_AWAY = 5.0
-
-MAX_CHANGE_IN_AREA = 0.5
-
-MAX_CHANGE_IN_WIDTH = 0.8
-MAX_CHANGE_IN_HEIGHT = 0.2
-
-MAX_ANGLE_BETWEEN_CHARS = 12.0
-
-# other constants
-MIN_NUMBER_OF_MATCHING_CHARS = 3
-
-RESIZED_CHAR_IMAGE_WIDTH = 20
-RESIZED_CHAR_IMAGE_HEIGHT = 30
-
-MIN_CONTOUR_AREA = 100
+MIN_PIXEL_AREA = 59
 
 
-def load_and_train_KNN():
-    try:
-        # read in training classifications
-        classifications = np.loadtxt("classifications.txt", np.float32)
-    # if file could not be opened
-    except Exception:
-        print("error, unable to open classifications.txt, exiting program\n")
-        os.system("pause")
-        # and return False
-        return False
-
-    try:
-        # read in training images
-        flattened_images = np.loadtxt("flattened_images.txt", np.float32)
-    # if file could not be opened
-    except Exception:
-        print("error, unable to open flattened_images.txt, exiting program\n")
-        os.system("pause")
-        return False
-
-    # reshape numpy array to 1d, necessary to pass to call to train
-    classifications = classifications.reshape(
-        (classifications.size, 1))
-
-    # set default K to 1
-    kNearest.setDefaultK(1)
-
-    kNearest.train(flattened_images, cv2.ml.ROW_SAMPLE,
-                   classifications)           # train KNN object
-
-    # if we got here training was successful so return true
-    return True
-# end function
-
-
-def check_if_possible_char(possibleChar):
+def check_if_char(possibleChar):
     if (possibleChar.int_rect_area > MIN_PIXEL_AREA
         and possibleChar.int_rect_w > MIN_PIXEL_WIDTH
         and possibleChar.int_rect_h > MIN_PIXEL_HEIGHT
@@ -79,73 +29,86 @@ def check_if_possible_char(possibleChar):
         return False
 
 
-def recognize_char(img_thresh, list_of_possible_chars):
-    strChars = ""
-    height, width = img_thresh.shape
+img_trainning_numbers = cv2.imread('fix3.jpg')
 
-    imgThreshColor = np.zeros((height, width, 3), np.uint8)
+img_gray = cv2.cvtColor(
+    img_trainning_numbers, cv2.COLOR_BGR2GRAY)  # get gray img
+img_blurred = cv2.GaussianBlur(img_gray, (3, 3), 0)
 
-    list_of_possible_chars.sort(
-        key=lambda matchingChar: matchingChar.int_center_x)
+# filter img to binary form
+img_thresh = cv2.adaptiveThreshold(img_gray,
+                                   255,
+                                   cv2.ADAPTIVE_THRESH_MEAN_C,
+                                   cv2.THRESH_BINARY_INV,
+                                   11,
+                                   2)
 
-    cv2.cvtColor(img_thresh, cv2.COLOR_GRAY2BGR, imgThreshColor)
+cv2.imshow("imgThresh", img_thresh)
 
-    for currentChar in list_of_possible_chars:
-        pt1 = (currentChar.int_rect_x, currentChar.int_rect_y)
-        pt2 = ((currentChar.int_rect_x + currentChar.int_rect_w),
-               (currentChar.int_rect_y + currentChar.int_rect_h))
+img_thresh_cp = img_thresh.copy()
+# cv2.line(img_thresh_cp, (0, 0), (
+#     img_trainning_numbers.shape[1],
+#     0),
+#     (0, 0, 0), 5)
+# cv2.line(img_thresh_cp, (0, img_trainning_numbers.shape[0]), (
+#     img_trainning_numbers.shape[1],
+#     img_trainning_numbers.shape[0]),
+#     (0, 0, 0), 5)
+cv2.rectangle(img_thresh_cp, (0, 0), (
+    img_trainning_numbers.shape[1],
+    img_trainning_numbers.shape[0]),
+    (0, 0, 0), 3)
+cv2.imshow("test", img_thresh_cp)
+npa_contours, _ = cv2.findContours(img_thresh_cp,
+                                   cv2.RETR_EXTERNAL,
+                                   cv2.CHAIN_APPROX_SIMPLE)
 
-        cv2.rectangle(imgThreshColor, pt1, pt2, (0.0, 255.0, 0.0),
-                      2)           # draw green box around the char
+list_of_chars = []
+for npa_contour in npa_contours:
+    possibleChar = possibleChars.PossibleChar(npa_contour)
 
-        # crop char out of threshold image
-        imgROI = img_thresh[currentChar.int_rect_y: currentChar.int_rect_y
-                            + currentChar.int_rect_h,
-                            currentChar.int_rect_x: currentChar.int_rect_x
-                            + currentChar.int_rect_w]
+    print("Center x")
+    print(possibleChar.int_center_x)
+    print("Center y")
+    print(possibleChar.int_center_y)
+    print("Area")
+    print(possibleChar.int_rect_area)
+    print("rect h")
+    print(possibleChar.int_rect_h)
+    print("rect w")
+    print(possibleChar.int_rect_w)
+    print("rect x")
+    print(possibleChar.int_rect_x)
+    print("rect y")
+    print(possibleChar.int_rect_y)
+    if (possibleChar.int_rect_area > MIN_PIXEL_AREA):
+        print("Area Checked")
+    if (possibleChar.int_rect_w > MIN_PIXEL_WIDTH):
+        print("w Checked")
+    if (possibleChar.int_rect_h > MIN_PIXEL_HEIGHT):
+        print("h Checked")
+    if (possibleChar.flt_aspect_ratio > MIN_ASPECT_RATIO):
+        print("min ratito Checked")
+    if (possibleChar.flt_aspect_ratio < MAX_ASPECT_RATIO):
+        print("max ratito Checked")
+    if check_if_char(possibleChar):
+        list_of_chars.append(possibleChar)
+    list_of_chars.sort(
+        key=lambda matching_char: matching_char.int_center_x)
 
-        # resize image, this is necessary for char recognition
-        imgROIResized = cv2.resize(
-            imgROI, (RESIZED_CHAR_IMAGE_WIDTH, RESIZED_CHAR_IMAGE_HEIGHT))
+print(len(list_of_chars))
+for i in range(0, len(list_of_chars)):
+    if i > 7:
+        continue
+    [int_x, int_y, int_w, int_h] = [list_of_chars[i].int_rect_x,
+                                    list_of_chars[i].int_rect_y,
+                                    list_of_chars[i].int_rect_w,
+                                    list_of_chars[i].int_rect_h]
+    img_roi = img_thresh[int_y: int_y+int_h, int_x: int_x+int_w]
+    img_roi_resized = cv2.resize(
+        img_roi, (RESIZED_IMAGE_WIDTH, RESIZED_IMAGE_HEIGHT))
+    cv2.imshow("imgROIResized", img_roi_resized)
 
-        # flatten image into 1d numpy array
-        npaROIResized = imgROIResized.reshape(
-            (1, RESIZED_CHAR_IMAGE_WIDTH * RESIZED_CHAR_IMAGE_HEIGHT))
-
-        # convert from 1d numpy array of ints to 1d numpy array of floats
-        npaROIResized = np.float32(npaROIResized)
-
-        retval, npaResults, neigh_resp, dists = kNearest.findNearest(
-            npaROIResized, k=1)
-
-        # get character from results
-        strCurrentChar = str(chr(int(npaResults[0][0])))
-
-        # append current char to full string
-        strChars = strChars + strCurrentChar
-
-    # end for
-    return strChars
-
-
-load_and_train_KNN()
-
-img = cv2.imread("test.jpg")
-img_gray, img_thresh = preprocess.preprocess(img)
-
-list_of_possible_chars = []
-img_thresh_copy = img_thresh.copy()
-
-cv2.imshow('threshold', img_thresh)
-cv2.waitKey(0)
-contours, _ = cv2.findContours(
-    img_thresh_copy, cv2.RETR_LIST,
-    cv2.CHAIN_APPROX_SIMPLE)
-
-for contour in contours:
-    possibleChar = possibleChars.PossibleChar(contour)
-    if check_if_possible_char(possibleChar):
-        list_of_possible_chars.append(possibleChar)
-
-strChars = recognize_char(img_thresh, list_of_possible_chars)
-print(strChars)
+    press = cv2.waitKey(0)
+    if (press == ord('g')):
+        print("added label!")
